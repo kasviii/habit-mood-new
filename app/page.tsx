@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Check, X, Download, TrendingUp, Calendar, Sparkles, Trophy, Undo2, Tag, Palette, Moon, Sun } from 'lucide-react';
 import { useUser } from '@clerk/nextjs';
