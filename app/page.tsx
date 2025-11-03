@@ -83,12 +83,16 @@ export default function Home() {
   }, [isMounted, isLoaded, user]);
 
   useEffect(() => {
-    if (moodData[selectedDate]) {
-      setDiaryEntry(moodData[selectedDate].diary || '');
-    } else {
-      setDiaryEntry('');
+    // Clear any pending save operations when date changes
+    if (diaryTimeoutRef.current) {
+      clearTimeout(diaryTimeoutRef.current);
+      diaryTimeoutRef.current = null;
     }
-  }, [selectedDate, moodData]);
+    
+    // Load diary entry for the selected date
+    const entry = moodData[selectedDate]?.diary || '';
+    setDiaryEntry(entry);
+  }, [selectedDate]);
 
   useEffect(() => {
     if (!isMounted) return;
@@ -159,11 +163,31 @@ export default function Home() {
 
   const saveMoodData = (updatedMoodData: Record<string, MoodEntry>) => {
     if (!user || typeof window === 'undefined') return;
-    setMoodData(updatedMoodData);
+    
     try {
       localStorage.setItem(`mood-${user.id}`, JSON.stringify(updatedMoodData));
+      // Only update state if it's actually different
+      setMoodData(updatedMoodData);
     } catch (error) {
       console.error('Error saving mood data:', error);
+    }
+  };
+
+  const updateDiaryInStorage = (text: string) => {
+    if (typeof window === 'undefined' || !user) return;
+    
+    const currentMoodData = JSON.parse(localStorage.getItem(`mood-${user.id}`) || '{}');
+    
+    if (!currentMoodData[selectedDate]) {
+      currentMoodData[selectedDate] = { color: 0, diary: text };
+    } else {
+      currentMoodData[selectedDate] = { ...currentMoodData[selectedDate], diary: text };
+    }
+    
+    try {
+      localStorage.setItem(`mood-${user.id}`, JSON.stringify(currentMoodData));
+    } catch (error) {
+      console.error('Error saving diary:', error);
     }
   };
 
@@ -310,23 +334,26 @@ export default function Home() {
   };
 
   const updateDiary = (text: string) => {
-    setDiaryEntry(text);
-    
-    // Auto-save after 2 seconds of no typing
-    if (diaryTimeoutRef.current) {
-      clearTimeout(diaryTimeoutRef.current);
-    }
-    
-    diaryTimeoutRef.current = setTimeout(() => {
-      const updatedMoodData = { ...moodData };
-      if (!updatedMoodData[selectedDate]) {
-        updatedMoodData[selectedDate] = { color: 0, diary: text };
-      } else {
-        updatedMoodData[selectedDate].diary = text;
-      }
-      saveMoodData(updatedMoodData);
-    }, 2000);
-  };
+   setDiaryEntry(text);
+
+  // Update moodData immediately in state to avoid re-renders cutting input
+   setMoodData(prev => ({
+     ...prev,
+     [selectedDate]: {
+       ...(prev[selectedDate] || { color: 0 }),
+       diary: text,
+     },
+   }));
+
+   if (diaryTimeoutRef.current) {
+     clearTimeout(diaryTimeoutRef.current);
+   }
+
+  diaryTimeoutRef.current = setTimeout(() => {
+    updateDiaryInStorage(text);
+  }, 2000);
+};
+
 
   const getTodayStats = () => {
     const todayCompletions = habits.filter(h => h.completions[selectedDate]).length;
@@ -1060,14 +1087,6 @@ export default function Home() {
         </div>
       )}
 
-      <style jsx>{`
-        @keyframes fall {
-          to {
-            transform: translateY(100vh) rotate(360deg);
-            opacity: 0;
-          }
-        }
-      `}</style>
     </div>
   );
 }
