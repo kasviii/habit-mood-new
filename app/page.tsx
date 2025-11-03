@@ -46,10 +46,11 @@ const ACCENT_COLORS = [
 
 export default function Home() {
   const { user, isLoaded } = useUser();
+  const [isMounted, setIsMounted] = useState(false);
   const [currentView, setCurrentView] = useState('dashboard');
   const [habits, setHabits] = useState<Habit[]>([]);
   const [moodData, setMoodData] = useState<Record<string, MoodEntry>>({});
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState('');
   const [showAddHabit, setShowAddHabit] = useState(false);
   const [showDiaryModal, setShowDiaryModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -68,12 +69,18 @@ export default function Home() {
   const [toastMessage, setToastMessage] = useState('');
   const diaryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Initialize mounted state and selected date
   useEffect(() => {
-    if (isLoaded && user) {
+    setIsMounted(true);
+    setSelectedDate(new Date().toISOString().split('T')[0]);
+  }, []);
+
+  useEffect(() => {
+    if (isMounted && isLoaded && user) {
       loadData();
       checkEveningSummary();
     }
-  }, [isLoaded, user]);
+  }, [isMounted, isLoaded, user]);
 
   useEffect(() => {
     if (moodData[selectedDate]) {
@@ -84,16 +91,17 @@ export default function Home() {
   }, [selectedDate, moodData]);
 
   useEffect(() => {
+    if (!isMounted) return;
     // Apply theme
     if (settings.theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
-  }, [settings.theme]);
+  }, [settings.theme, isMounted]);
 
   const loadData = () => {
-    if (!user) return;
+    if (!user || typeof window === 'undefined') return;
     
     try {
       const habitKey = `habits-${user.id}`;
@@ -116,6 +124,8 @@ export default function Home() {
   };
 
   const checkEveningSummary = () => {
+    if (typeof window === 'undefined') return;
+    
     const now = new Date();
     const hour = now.getHours();
     
@@ -138,7 +148,7 @@ export default function Home() {
   };
 
   const saveHabits = (updatedHabits: Habit[]) => {
-    if (!user) return;
+    if (!user || typeof window === 'undefined') return;
     setHabits(updatedHabits);
     try {
       localStorage.setItem(`habits-${user.id}`, JSON.stringify(updatedHabits));
@@ -148,7 +158,7 @@ export default function Home() {
   };
 
   const saveMoodData = (updatedMoodData: Record<string, MoodEntry>) => {
-    if (!user) return;
+    if (!user || typeof window === 'undefined') return;
     setMoodData(updatedMoodData);
     try {
       localStorage.setItem(`mood-${user.id}`, JSON.stringify(updatedMoodData));
@@ -158,7 +168,7 @@ export default function Home() {
   };
 
   const saveAchievements = (updatedAchievements: Achievement[]) => {
-    if (!user) return;
+    if (!user || typeof window === 'undefined') return;
     setAchievements(updatedAchievements);
     try {
       localStorage.setItem(`achievements-${user.id}`, JSON.stringify(updatedAchievements));
@@ -168,7 +178,7 @@ export default function Home() {
   };
 
   const saveSettings = (updatedSettings: UserSettings) => {
-    if (!user) return;
+    if (!user || typeof window === 'undefined') return;
     setSettings(updatedSettings);
     try {
       localStorage.setItem(`settings-${user.id}`, JSON.stringify(updatedSettings));
@@ -379,6 +389,11 @@ export default function Home() {
   };
 
   const currentAccent = ACCENT_COLORS.find(c => c.name === settings.accentColor) || ACCENT_COLORS[0];
+
+  // Don't render until mounted to avoid hydration issues
+  if (!isMounted) {
+    return null;
+  }
 
   const DashboardView = () => {
     const stats = getTodayStats();
